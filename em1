@@ -1,0 +1,44 @@
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score
+
+# Sample DataFrame - Replace this with your actual data
+data = {
+    "text": [
+        "Regulation A requires X",
+        "Regulation B prohibits Y",
+        "Regulation C allows Z",
+        "Regulation D mandates W"
+    ],
+    "obligation": ["Yes", "No", "No", "Yes"]
+}
+df = pd.DataFrame(data)
+
+# Splitting the data into training and testing sets
+X = df['text']  # Text column
+y = df['obligation']  # Target variable
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Converting text to feature vectors using CountVectorizer
+vectorizer = CountVectorizer()
+X_train_vectorized = vectorizer.fit_transform(X_train)
+X_test_vectorized = vectorizer.transform(X_test)
+
+# Building the Logistic Regression model
+model = LogisticRegression()
+model.fit(X_train_vectorized, y_train)
+
+# Making predictions
+y_pred = model.predict(X_test_vectorized)
+
+# Evaluating the model
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+
+# Example of predicting a new text
+new_text = ["Regulation E introduces Q"]
+new_text_vectorized = vectorizer.transform(new_text)
+prediction = model.predict(new_text_vectorized)
+print("\nPrediction for new text:", prediction[0])
