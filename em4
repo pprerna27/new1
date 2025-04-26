@@ -55,3 +55,39 @@ new_text = ["Regulation E introduces Q"]
 new_text_vectorized = np.array([get_doc2vec_vector(sentence, doc2vec_model) for sentence in new_text])
 prediction = model.predict(new_text_vectorized)
 print("\nPrediction for new text:", prediction[0])
+
+import pandas as pd
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Example DataFrame
+data = {'text_column': ['This is a sample sentence.', 
+                        'Tokenize this text for vectorization.', 
+                        'Count and TF-IDF are useful.']}
+df = pd.DataFrame(data)
+
+# Tag documents
+tagged_documents = [TaggedDocument(words=text.split(), tags=[i]) for i, text in enumerate(df['text_column'])]
+
+# Train Doc2Vec model
+doc2vec_model = Doc2Vec(tagged_documents, vector_size=100, window=5, min_count=1, workers=4)
+
+# Get document embeddings
+df['doc_embedding'] = [doc2vec_model.dv[i] for i in range(len(df))]
+
+# Convert embeddings to feature matrix
+X = np.vstack(df['doc_embedding'].values)
+y = [1, 0, 1]  # Replace with real labels
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train logistic regression model
+log_reg = LogisticRegression()
+log_reg.fit(X_train, y_train)
+
+# Evaluate
+accuracy = log_reg.score(X_test, y_test)
+print(f"Model Accuracy (Doc2Vec): {accuracy:.2f}")
