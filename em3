@@ -58,3 +58,44 @@ new_text = ["Regulation E introduces Q"]
 new_text_vectorized = np.array([get_average_word2vec(sentence, word2vec_model) for sentence in new_text])
 prediction = model.predict(new_text_vectorized)
 print("\nPrediction for new text:", prediction[0])
+
+
+import pandas as pd
+from gensim.models import Word2Vec
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Example DataFrame
+data = {'text_column': ['This is a sample sentence.', 
+                        'Tokenize this text for vectorization.', 
+                        'Count and TF-IDF are useful.']}
+df = pd.DataFrame(data)
+
+# Tokenize text (split into words)
+df['tokenized'] = df['text_column'].apply(lambda x: x.split())
+
+# Train Word2Vec model
+word2vec_model = Word2Vec(sentences=df['tokenized'], vector_size=100, window=5, min_count=1, workers=4)
+
+# Create sentence embeddings by averaging word vectors
+def get_sentence_embedding(tokens, model):
+    vectors = [model.wv[word] for word in tokens if word in model.wv]
+    return np.mean(vectors, axis=0) if vectors else np.zeros(model.vector_size)
+
+df['sentence_embedding'] = df['tokenized'].apply(lambda x: get_sentence_embedding(x, word2vec_model))
+
+# Convert embeddings to feature matrix
+X = np.vstack(df['sentence_embedding'].values)
+y = [1, 0, 1]  # Replace with real labels
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train logistic regression model
+log_reg = LogisticRegression()
+log_reg.fit(X_train, y_train)
+
+# Evaluate
+accuracy = log_reg.score(X_test, y_test)
+print(f"Model Accuracy (Word2Vec): {accuracy:.2f}")
