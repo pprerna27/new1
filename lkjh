@@ -1,30 +1,45 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 from scipy.stats import chi2_contingency
 
+# Function to calculate Cramér's V
 def cramers_v(x, y):
-    # Create a contingency table
     contingency_table = pd.crosstab(x, y)
-    chi2_statistic, p_value, dof, expected = chi2_contingency(contingency_table)
+    chi2_statistic, _, _, expected = chi2_contingency(contingency_table)
     
-    # Calculate Cramer's V
     n = contingency_table.sum().sum()
     phi2 = chi2_statistic / n
     r, k = contingency_table.shape
     phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
     k_corr = k - (k - 1) * (k - 2) / (n - 1)
     r_corr = r - (r - 1) * (r - 2) / (n - 1)
-    v = np.sqrt(phi2corr / min(k_corr - 1, r_corr - 1))
     
-    return v
+    return np.sqrt(phi2corr / min(k_corr - 1, r_corr - 1))
 
-# List of categorical variables
-categorical_vars = df.columns
+# Select categorical variables except the target variable
+categorical_vars = [col for col in df.columns if col != 'col6']
 
-# Initialize a DataFrame to store the results
-cramers_v_matrix = pd.DataFrame(index=categorical_vars, columns=categorical_vars)
+# Initialize a dictionary to store Cramér's V values for col6
+cramers_v_scores = {}
 
-# Calculate Cramér's V for each pair of variables
-for var1 in categorical_vars:
-    for var2 in categorical_vars:
-        cramers_v_matrix.loc[var1, var2] = cramers_v(df[var1], df[var2])
+# Compute Cramér's V between each independent variable and target variable (col6)
+for var in categorical_vars:
+    cramers_v_scores[var] = cramers_v(df[var], df['col6'])
 
-print(cramers_v_matrix)
+# Convert to DataFrame and sort by relevance
+cramers_v_df = pd.DataFrame(cramers_v_scores.items(), columns=['Feature', 'Cramers_V'])
+cramers_v_df = cramers_v_df.sort_values(by='Cramers_V', ascending=False)
+
+# Plot the heatmap to visualize feature relevance
+plt.figure(figsize=(8, 6))
+sns.barplot(x='Cramers_V', y='Feature', data=cramers_v_df, palette="coolwarm")
+plt.title("Feature Importance based on Cramér's V")
+plt.xlabel("Cramér's V Score")
+plt.ylabel("Features")
+plt.show()
+
+# Display sorted relevance table
+print("\nFeature relevance for predicting col6:")
+print(cramers_v_df)
