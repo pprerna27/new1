@@ -1,45 +1,74 @@
+import os
+import time
+import requests
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import chi2_contingency
+import PyPDF2
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-# Function to calculate Cramér's V
-def cramers_v(x, y):
-    contingency_table = pd.crosstab(x, y)
-    chi2_statistic, _, _, expected = chi2_contingency(contingency_table)
-    
-    n = contingency_table.sum().sum()
-    phi2 = chi2_statistic / n
-    r, k = contingency_table.shape
-    phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
-    k_corr = k - (k - 1) * (k - 2) / (n - 1)
-    r_corr = r - (r - 1) * (r - 2) / (n - 1)
-    
-    return np.sqrt(phi2corr / min(k_corr - 1, r_corr - 1))
+# Function to set up Selenium WebDriver
+def setup_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in headless mode (no browser UI)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    return driver
 
-# Select categorical variables except the target variable
-categorical_vars = [col for col in df.columns if col != 'col6']
+# Function to extract PDF links using Selenium
+def get_pdf_links(url):
+    driver = setup_driver()
+    driver.get(url)
+    time.sleep(3)  # Wait for page to load
 
-# Initialize a dictionary to store Cramér's V values for col6
-cramers_v_scores = {}
+    pdf_links = []
+    elements = driver.find_elements(By.TAG_NAME, "a")  # Find all links
+    for element in elements:
+        href = element.get_attribute("href")
+        if href and href.endswith('.pdf'):  # Filter only PDF links
+            pdf_links.append(href)
 
-# Compute Cramér's V between each independent variable and target variable (col6)
-for var in categorical_vars:
-    cramers_v_scores[var] = cramers_v(df[var], df['col6'])
+    driver.quit()
+    return pdf_links
 
-# Convert to DataFrame and sort by relevance
-cramers_v_df = pd.DataFrame(cramers_v_scores.items(), columns=['Feature', 'Cramers_V'])
-cramers_v_df = cramers_v_df.sort_values(by='Cramers_V', ascending=False)
+# Function to download a PDF and count its pages
+def download_and_count_pages(pdf_url, save_folder):
+    pdf_name = pdf_url.split('/')[-1]
+    pdf_path = os.path.join(save_folder, pdf_name)
 
-# Plot the heatmap to visualize feature relevance
-plt.figure(figsize=(8, 6))
-sns.barplot(x='Cramers_V', y='Feature', data=cramers_v_df, palette="coolwarm")
-plt.title("Feature Importance based on Cramér's V")
-plt.xlabel("Cramér's V Score")
-plt.ylabel("Features")
-plt.show()
+    # Download the PDF
+    response = requests.get(pdf_url)
+    with open(pdf_path, 'wb') as f:
+        f.write(response.content)
 
-# Display sorted relevance table
-print("\nFeature relevance for predicting col6:")
-print(cramers_v_df)
+    # Count pages
+    try:
+        with open(pdf_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            num_pages = len(reader.pages)
+    except Exception as e:
+        num_pages = None  # Handle errors gracefully
+
+    return pdf_name, num_pages
+
+# Main function
+def scrape_pdfs(url, save_folder='pdf_downloads'):
+    os.makedirs(save_folder, exist_ok=True)  # Create folder if not exists
+
+    pdf_links = get_pdf_links(url)
+    pdf_data = []
+
+    for pdf_url in pdf_links:
+        pdf_name, num_pages = download_and_count_pages(pdf_url, save_folder)
+        pdf_data.append({'PDF Name': pdf_name, 'Number of Pages': num_pages})
+
+    # Convert to DataFrame and export
+    df = pd.DataFrame(pdf_data)
+    df.to_csv('pdf_report.csv', index=False)
+
+    return df
+
+# Example usage
+url = "https://example.com"  # Replace with the actual webpage containing PDFs
+df = scrape_pdfs(url)
+print(df)
