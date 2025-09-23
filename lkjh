@@ -62,3 +62,99 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+import pandas as pd
+import win32com.client as win32
+import time
+import csv
+from datetime import datetime
+
+# -----------------------------
+# Config
+# -----------------------------
+excel_file = r"C:\path\to\MailList.xlsx"       # Excel file with multiple sheets
+attachment_file = r"C:\path\to\Attachment.xlsx"  # File to attach
+subject_base = "Fixed Subject - Category"
+body_text = """
+Hello,
+
+This is a fixed email body.
+
+Regards,
+Your Name
+"""
+log_file = r"C:\path\to\email_log.csv"
+
+# -----------------------------
+# Prepare log CSV
+# -----------------------------
+with open(log_file, 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(["Timestamp", "Sheet", "To", "CC", "Status", "TimeTaken_seconds"])
+
+# -----------------------------
+# Start Outlook
+# -----------------------------
+outlook = win32.Dispatch('outlook.application')
+
+# -----------------------------
+# Get all sheet names dynamically
+# -----------------------------
+excel_obj = pd.ExcelFile(excel_file)
+sheets = excel_obj.sheet_names
+print("Sheets found:", sheets)
+
+# -----------------------------
+# Loop through each sheet
+# -----------------------------
+for sheet_name in sheets:
+    start_sheet_time = time.time()
+    print(f"\nProcessing Sheet '{sheet_name}' ...")
+
+    try:
+        start_read_time = time.time()
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+        read_time = time.time() - start_read_time
+        print(f"Time to read sheet '{sheet_name}': {read_time:.2f} seconds")
+    except Exception as e:
+        print(f"Error reading sheet '{sheet_name}': {e}")
+        continue
+
+    # Get current month and year
+    month_year = datetime.now().strftime("%B %Y")
+
+    # Loop through each row
+    for idx, row in df.iterrows():
+        start_mail_time = time.time()
+        # Split by comma and remove extra spaces
+        to_list = ', '.join([email.strip() for email in str(row['To']).split(',')])
+        cc_list = ', '.join([email.strip() for email in str(row['CC']).split(',')])
+        status = "Success"
+
+        try:
+            mail = outlook.CreateItem(0)  # 0 = olMailItem
+            mail.To = to_list
+            mail.CC = cc_list
+            mail.Subject = f"{subject_base} - {sheet_name} - {month_year}"
+            mail.Body = body_text
+            mail.Attachments.Add(attachment_file)
+
+            mail.Send()
+            print(f"Email sent to {to_list} (CC: {cc_list})")
+        except Exception as e:
+            print(f"Failed to send email to {to_list}: {e}")
+            status = f"Failed: {e}"
+
+        time_taken = time.time() - start_mail_time
+
+        # Log to CSV
+        with open(log_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([datetime.now(), sheet_name, to_list, cc_list, status, round(time_taken, 2)])
+
+    total_sheet_time = time.time() - start_sheet_time
+    print(f"Total time for Sheet '{sheet_name}': {total_sheet_time:.2f} seconds")
+
+print("\nAll emails processed. Log saved to:", log_file)
